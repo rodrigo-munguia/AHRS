@@ -1,0 +1,111 @@
+function [x P x2 P2]= MagnetometerUpdateAHRSv2(u,x,P,x2,P2)
+global GVAR;
+global PAR;
+
+
+
+ GVAR.T_m = GVAR.t;
+ 
+ if PAR.DirectMethodActive == 1 
+ 
+Rm = PAR.Rm; 
+
+mb_t = u.mb_t;
+                Rn2b    = quat2R(x(1:4,1));
+                Rb2n    = Rn2b';
+                mb_N = Rb2n*mb_t;
+                mb_N(3) = 0;
+                mb_N = mb_N/norm(mb_N );
+                mb_B = Rn2b*mb_N;  % Magnetometer measurements with earth magnetic field component Z removed     
+                
+                head_m = atan2(-mb_B(2),mb_B(1));
+
+               JHe   =  JacH6b(x);
+               
+               zh = atan2(2*(x(2)*x(3)- x(1)*x(4)) , 1 - 2*(x(3)^2 + x(4)^2) ); % predicted heading
+              
+               
+               Ram = Rm*3;
+              
+               S = JHe*P*JHe' + Ram;  %Innovation matrix
+               K   = P*JHe'/S;     % KF gain
+               P  = P - K*(JHe*P);               % meas update for cov
+            
+               in =  head_m - zh;  % heading measured - predicted heading 
+               %[in head_m  zh]
+               xi = K*in;
+               
+               %xi(7) = 0;
+               x(1:10) = x(1:10) + xi;
+ else
+     x = nan;
+     P = nan;
+     
+ end;
+ 
+  %**************************************************************************             
+%**************************************************************************
+% indirect method
+
+if PAR.IndirectMethodActive == 1
+    
+    
+ Hm = zeros(1,9);  % Accelometer Measuremnt model initialization                  
+                     Hm(1,3) = 1;                           
+                    
+                     mhatg_n =  Rb2n*mb_t';
+                     mhatg_n(3) = 0;
+                     mhatg_n = mhatg_n/norm(mhatg_n);                     
+                   
+                     Raa = Ra;
+                     
+                    K   = Pm*Hm'*inv(Hm*Pm*Hm'+Raa);     % KF gain                   
+                   
+                    Pp  = Pm - K*(Hm*Pm);               % meas update for cov
+                    
+                    
+                 %    Kt = K(3);
+                 %   Kt2 = K(6);
+                 %   K = zeros(9,1);
+                 %   K(3) = Kt;
+                 %   K(6) = Kt2;                 
+                    
+                   
+                     ym = [1 0 0]';                     
+                     
+                     mres = ym - mhatg_n;                     
+                    
+                     res = mres;                     
+                     
+                     del_x = K*res(2);              % compute state correction
+                     
+                     if (k == 1000) 
+                         s = 10;
+                     end;                     
+                     
+                     rho = del_x(1:3);
+                     rho_cross = [0     -rho(3) rho(2)
+                                  rho(3) 0     -rho(1)
+                                 -rho(2) rho(1) 0];
+                     Rn2b = Rn2b*(I-rho_cross);
+                     qpc = Rot2Quat(Rn2b); 
+                     qpc = qpc/norm(qpc); 
+                     x(1:4)  = qpc ;          % correct quaternion
+                   
+                     x(5:10) = x(5:10) + del_x(4:9);    % correct state
+                     del_x = 0*del_x;           % reset state correction
+                     Pm = Pp;                   % get ready for time updates
+
+
+
+
+
+else
+     x2 = nan;
+     P2 = nan;
+     
+ end;  
+    
+    
+    
+    

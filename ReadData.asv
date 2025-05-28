@@ -1,0 +1,155 @@
+function [u g k j gt]= ReadData
+global PAR;
+global DATA;
+global GVAR;
+
+
+if PAR.DataO == 'RaD'
+    if and((GVAR.kimu < size(DATA.IMU(:,1),1)),(GVAR.kgps < size(DATA.GPS(:,1),1)))
+
+        k = GVAR.kimu;
+        j = nan;
+
+        if DATA.IMU(GVAR.kimu,1) <=   DATA.GPS(GVAR.kgps,1)
+
+            u.f_ip_p = ((DATA.IMU(GVAR.kimu,2:4)- PAR.AccelBias )') ; % m/s/s,   body frame specific force
+            u.w_bn_b = ((DATA.IMU(GVAR.kimu,5:7) - PAR.AproxGirobias)' );  % giro readings
+            u.mb_t = (DATA.IMU(GVAR.kimu,8:10)- PAR.AproxMagBias)'; % magnetomer readings 
+
+            g.lat =  nan;
+            g.lon =  nan;
+            g.h =  nan;
+            g.elat = nan;
+            g.elon = nan;
+            g.nsat = nan;
+
+            GVAR.kimu = GVAR.kimu +1;
+        else
+
+
+            u.f_ip_p = nan;
+            u.w_bn_b = nan;
+            u.mb_t = nan;
+
+            
+                g.lat =  DATA.GPS(GVAR.kgps,2);
+                g.lon =  DATA.GPS(GVAR.kgps,3);
+                g.h =  DATA.GPS(GVAR.kgps,4);
+                g.elat = DATA.GPS(GVAR.kgps,5);
+                g.elon = DATA.GPS(GVAR.kgps,6);
+                g.nsat = DATA.GPS(GVAR.kgps,7);
+            
+            j = GVAR.kgps;
+            GVAR.kgps = GVAR.kgps + 1;  
+        end;
+    else
+           u.f_ip_p = nan;
+            u.w_bn_b = nan;
+            u.mb_t = nan;
+            g.lat =  nan;
+            g.lon =  nan;
+            g.h =  nan;
+            g.elat = nan;
+            g.elon = nan;
+            g.nsat = nan;
+
+            k = nan;
+            j = nan;
+
+    end;
+elseif PAR.DataO == 'Mal'
+    if and((GVAR.kimu < size(DATA.IMU(:,1),1)),(GVAR.kgps < size(DATA.GPS(:,1),1)))
+
+        k = GVAR.kimu;
+        j = nan;
+
+        if DATA.IMU(GVAR.kimu,1) <=   DATA.GPS(GVAR.kgps,1)
+
+            u.f_ip_p = ((DATA.IMU(GVAR.kimu,2:4)- PAR.AccelBias )') ; % m/s/s,   body frame specific force
+            u.w_bn_b = ((DATA.IMU(GVAR.kimu,5:7) - PAR.AproxGirobias)' );  % giro readings
+            u.mb_t = nan'; % magnetomer readings 
+
+            g.lat =  nan;
+            g.lon =  nan;
+            g.h =  nan;
+            g.mode = nan;
+            g.nsat = nan;
+            g.speed = nan;
+            g.dir =  nan;
+
+            GVAR.kimu = GVAR.kimu +1;
+        else
+
+
+            u.f_ip_p = nan;
+            u.w_bn_b = nan;
+            u.mb_t = nan;
+
+            
+                g.lat =  DATA.GPS(GVAR.kgps,2);
+                g.lon =  DATA.GPS(GVAR.kgps,3);
+                g.h =  DATA.GPS(GVAR.kgps,4);
+                g.mode = DATA.GPS(GVAR.kgps,5);
+                g.nsat = DATA.GPS(GVAR.kgps,6);
+                g.speed = DATA.GPS(GVAR.kgps,7);
+                g.dir = DATA.GPS(GVAR.kgps,8);
+            
+            j = GVAR.kgps;
+            GVAR.kgps = GVAR.kgps + 1;  
+        end;
+    else
+           u.f_ip_p = nan;
+            u.w_bn_b = nan;
+            u.mb_t = nan;
+            g.lat =  nan;
+            g.lon =  nan;
+            g.h =  nan;
+            g.mode = nan;
+            g.nsat = nan;
+            g.speed = nan;
+            g.dir =  nan;
+
+            k = nan;
+            j = nan;
+
+    end;
+    
+elseif '3DM'
+    
+     if GVAR.kimu < size(DATA.IMU(:,1),1)
+         
+            k = GVAR.kimu;
+            j = nan;
+            u.f_ip_p = ((DATA.IMU(GVAR.kimu,2:4)- PAR.AccelBias )') ; % m/s/s,   body frame specific force
+            u.w_bn_b = ((DATA.IMU(GVAR.kimu,5:7) - PAR.AproxGirobias)' );  % giro readings
+            u.mb_t = (DATA.IMU(GVAR.kimu,8:10)- PAR.AproxMagBias)'; % magnetomer readings 
+            
+            gt.
+            
+            g.lat =  nan;
+            g.lon =  nan;
+            g.h =  nan;
+            g.elat = nan;
+            g.elon = nan;
+            g.nsat = nan;
+            
+            GVAR.kimu = GVAR.kimu +1;
+     else
+         
+            u.f_ip_p = nan;
+            u.w_bn_b = nan;
+            u.mb_t = nan;
+            g.lat =  nan;
+            g.lon =  nan;
+            g.h =  nan;
+            g.elat = nan;
+            g.elon = nan;
+            g.nsat = nan;
+
+            k = nan;
+            j = nan;
+     
+     end;
+    
+end;
+    

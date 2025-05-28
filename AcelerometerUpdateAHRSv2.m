@@ -1,0 +1,146 @@
+function [x P x2 P2]= AcelerometerUpdateAHRSv2(u,x,P,x2 ,P2)
+global GVAR;
+global PAR;
+
+  GVAR.T_a =  GVAR.t;  
+ %GC = PAR.g;
+ GC = GVAR.GC;
+ Ra = PAR.Ra;
+
+
+ delta_t = PAR.delta_t;
+   f_ip_p = -((u.f_ip_p*PAR.AccelScale)  ) ;                % m/s/s,   body frame specific force
+  nrm_accel  = norm(f_ip_p) - GC; 
+ 
+ if PAR.DirectMethodActive == 1 
+  
+
+  
+            JH   =  JacH6a(x,delta_t,0,GC,[0 0 0]); % measurement jacobian
+                        
+               % measurement noise matrix
+            
+               Raa = zeros(3,3);
+              Raa(1:3,1:3) = (Ra + (10*nrm_accel)^2)*eye(3,3);    % account for acceleration as error
+               
+              Rn2b    = quat2R(x(1:4,1));
+               
+               S = JH*P*JH' + Raa;  %Innovation matrix
+            
+                K   = P*JH'/S;     % KF gain
+               P  = P - K*(JH*P);               % meas update for cov
+             % z = Rn2b*[0 0 Gc]';
+               z = Rn2b*[0 0 GC]';
+               
+               % innovations
+               in = f_ip_p - z;
+              
+               % state update
+               xi = K*in;
+               x(1:10) = x(1:10) + xi;
+ else
+     x = nan;
+     P = nan;
+     
+ end;
+               
+ %**************************************************************************             
+%**************************************************************************
+% indirect method
+
+if PAR.IndirectMethodActive == 1
+    
+    x_a = x2(8:10); 
+    Rn2b    = quat2R(x2(1:4,1));
+    Rb2n = Rn2b';
+    
+     Ha = zeros(3,9);  % Accelometer Measurement model (Aided-10.42)
+     Ha(1,2) = GC;
+     Ha(2,1) =  -GC;
+     Ha(:,7:9) = Rb2n;
+    ha  = Ha(1:2,:);
+    
+    
+    hatg_n =  Rb2n*(x_a - u.f_ip_p*PAR.AccelScale);
+    Raa = (Ra + (10*nrm_accel)^2)*eye(2,2);    % account for acceleration as error
+    K   = P2*ha'*inv(ha*P2*ha'+Raa);     % KF gain
+    
+    ya = [0 0 GC]';
+    I = eye(3,3);
+    
+    P2  = P2 - K*(ha*P2);               % meas update for cov
+                 res = ya - hatg_n;
+                 del_x = K*res(1:2);              % compute state correction
+                 rho = del_x(1:3);
+                 rho_cross = [0     -rho(3) rho(2)
+                              rho(3) 0     -rho(1)
+                             -rho(2) rho(1) 0];
+                 Rn2b = Rn2b*(I-rho_cross);
+                 x2(1:4)  = Rot2Quat(Rn2b);            % correct quaternion
+                 x2(5:10) = x2(5:10) + del_x(4:9);    % correct state
+                % del_x = 0*del_x;           % reset state correction
+                % P2 = Pp;                   % get ready for time updates
+    
+    
+    %{
+    Ham = zeros(3,9);  % Accelometer Measuremnt model initialization                     
+    Ham(1,2) = GC;
+    Ham(2,1) =  -GC;   
+    Rn2b    = quat2R(x2(1:4,1));
+    Rb2n = Rn2b';
+    Ham(:,7:9) = Rb2n;                    
+    Ham(3,3) = 1;
+                    
+    x_a = x2(8:10); 
+    
+    ahatg_n =  Rb2n*(x_a - u.f_ip_p);
+    mhatg_n =  Rb2n*u.mb_t;
+    mhatg_n(3) = 0;
+    mhatg_n = mhatg_n/norm(mhatg_n);
+                     
+    Raa = zeros(3,3);
+    %% Measurement noise was increased related to the
+     %% proposed values in aided navigation
+     Raa(1:2,1:2) = (Ra + (1*nrm_accel)^2)*eye(2,2);    % account for acceleration as error
+     Raa(3,3) = PAR.Rm*5;
+                     
+    K   = P2*Ham'*inv(Ham*P2*Ham'+Raa);     % KF gain
+    P2  = P2 - K*(Ham*P2);               % meas update for cov
+                     
+    ya = [0 0 GC]';
+    ym = [1 0 0]';
+                     
+   ares = ya - ahatg_n;
+   mres = ym - mhatg_n;
+   
+  % mres = [0 0 0]';
+                     
+   res(1:2) = ares(1:2);
+   res(3) = mres(2);                    
+                     
+   del_x = K*res';              % compute state correction
+                     
+   %%%%%    (aided nav  10.67) %%%%%%%%%%%%
+   rho = del_x(1:3);
+   rho_cross = [0     -rho(3) rho(2)
+                rho(3) 0     -rho(1)
+                   -rho(2) rho(1) 0];
+   I = eye(3,3);
+   Rn2b = Rn2b*(I-rho_cross);
+   qpc = Rot2Quat(Rn2b); 
+   qpc = qpc/norm(qpc); 
+   x2(1:4)  = qpc ;          % correct quaternion                   
+    x2(5:10) = x2(5:10) + del_x(4:9);    % correct state
+   %********************************************
+    %}
+    
+    
+    
+else
+    
+   x2 = nan;
+   P2 = nan;
+end;
+               
+               
+               

@@ -1,0 +1,115 @@
+function [x P]= InitAHRSsys(u,x,P,x2,P2)
+global PAR;
+global GVAR;
+
+ f_ip_p = u.f_ip_p;
+ w_bn_b = u.w_bn_b;
+ mb_t = u.mb_t;
+ 
+ Gc = PAR.Gc;
+ delta_t = PAR.delta_t;
+ GiroScale = PAR.GiroScale;
+ AccelScale = PAR.AccelScale;
+ sigma_nu_a =  PAR.sigma_nu_a;
+ sigma_nu_g =  PAR.sigma_nu_g ;
+ sigma_xg = PAR.sigma_xg ;
+ 
+int_g = GVAR.int_g;
+int_b = GVAR.int_b;
+int_w = GVAR.int_w;
+int_T = GVAR.int_T;
+int_GC = GVAR.int_GC;
+int_ini = GVAR.int_ini;
+
+nrm_f  = norm(f_ip_p) - Gc;  
+gyro_nrm = norm(w_bn_b);
+           
+            %integrate stuff
+            int_w = int_w + ((w_bn_b)*GiroScale)*delta_t ; % integrating giro measurements (without bias) in repose for obtaining bias
+            %int_w = int_w + (data(k,4:6)*GiroScale) ; % integrating giro measurements (without bias) in repose for obtaining bias
+            int_g = int_g + -(f_ip_p*AccelScale)*delta_t;  %integrating part of equation % Aided 10.13
+            int_b = int_b + mb_t; % integrating part of equation % Aided 10.17
+            int_T = int_T + delta_t; % integrate time
+            
+            int_GC = int_GC + norm(f_ip_p*AccelScale);
+            int_ini = int_ini + 1;
+            
+                
+                xg = int_w/int_T; %  giro bias  xg  giros 
+                gb = int_g/int_T;  % Aided 10.13 %  xa accelerometer     
+                
+                mb = int_b/int_ini;   % Aided 10.17 %   magnetometers   (magnetomers readings is independent of time)
+                GC = int_GC/int_ini;
+                
+                
+                mb = mb/norm(mb);
+                
+                phi = atan2(gb(2), gb(3));  % 10.14
+                theta = atan2( -1*gb(1), sqrt(gb(2)^2+gb(3)^2) ); % 10.15
+                
+                if ~isnan(mb) % if IMU magnetometer is available
+                                      
+                    mw = [ [cos(theta) sin(theta)*sin(phi) sin(theta)*cos(phi)]
+                         [    0                 cos(phi)           -sin(phi)]
+                         [-sin(theta) cos(theta)*sin(phi) cos(theta)*cos(phi)] ] * mb; %10.16
+                    psi = atan2( -1*mw(2) , mw(1)); % 10.18
+                else
+                    
+                    psi = 80*(pi/180);  %%%% temporal !!!
+                    
+                     %psi = 0;
+                end;
+                
+                               
+               Rntb = R_n_to_b([phi theta psi]);
+                %% estimation of initial quaternion
+               qini = R_n_to_b_TO_Quat( Rntb   ); %  estimating initial quaternion.   
+               
+               
+               x(1:4) = qini;
+               
+               
+               if PAR.IncludeInitialGyroBiasEstimation == 1;
+                   x(8:10) = xg;
+                   GVAR.init_Gbias = xg';  
+                
+               else
+                   x(8:10) = [0 0 0];
+                   GVAR.init_Gbias = [0 0 0];
+                    
+                end
+               
+               
+               
+               %
+               
+               %% 
+               P(1:10,1:10) = Pini6(sigma_nu_a,sigma_nu_g,sigma_xg,int_T,[phi theta psi]); % estimate initial covariance matrix   
+               
+               %Pm = Pp;
+               
+%******************************************************
+
+
+
+
+
+
+%
+               
+               
+               
+               
+               
+               
+ 
+GVAR.int_g = int_g;
+GVAR.int_b = int_b;
+GVAR.int_w = int_w;
+GVAR.int_T = int_T;
+GVAR.int_GC = int_GC;
+GVAR.int_ini = int_ini;
+GVAR.GC = GC;
+
+               
+     

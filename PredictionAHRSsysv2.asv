@@ -1,0 +1,171 @@
+function [x P x2 P2]= PredictionAHRSsysv2(u,x,P,x2 ,P2)
+global PAR;
+global GVAR;
+
+
+delta_t = PAR.delta_t;
+ GiroScale = PAR.GiroScale;
+ sigma_nu_g =  PAR.sigma_nu_g ;
+ sigma_xg = PAR.sigma_xg ;
+ lambda_g  = PAR.lambda_g; 
+ lambda_w = PAR.lambda_w; 
+             
+                      
+           
+                         
+            %w_bn_b = -(((w_u))- x_gb);  % Giro compensated readings
+            
+            w_u  = u.w_bn_b*GiroScale + PAR.ExtraBias;   
+              
+              qWR = x(1:4,1);
+            
+             Rn2b    = quat2R(x(1:4,1));
+             Rb2n    = Rn2b';
+             
+          
+             %*************  Mechanization Model **************************
+             %**   x_k+1 = f(x_k,u_k)  ********************************
+            
+             
+                
+             
+             Fw = [ [(1-(lambda_w*delta_t)) 0  0     1    0      0    ]
+                    [0 (1-(lambda_w*delta_t))  0       0     1   0    ]
+                    [0  0  (1-(lambda_w*delta_t))      0        0   1 ]
+                    [0  0           0          (1-(lambda_g*delta_t)) 0  0  ]
+                    [0  0           0             0 (1-(lambda_g*delta_t)) 0]
+                    [0  0           0             0  0 (1-(lambda_g*delta_t))]];
+                
+             Bw = [[-1    0      0   ]
+                   [ 0     -1   0   ]
+                   [ 0        0   -1 ]
+                   [ 0        0        0   ]
+                   [ 0        0        0   ]
+                   [ 0        0        0   ]];
+               
+               %x(8:10) = [0 0 0]';
+                
+                
+             x(5:10,1) = Fw*x(5:10,1) + Bw*w_u;  
+             
+             qp = reshape(qprod(qWR,v2q(Rb2n*(x(5:7)*delta_t))),4,1);
+             qp = qp/norm(qp);
+             x(1:4,1) = qp;  
+             
+             
+             
+               xb = x(8:10);
+             
+             %**********************************************************
+             %  Jacobians
+             [JFx, JFu]  =  JacFx6(x,w_u,delta_t,xb,lambda_w,lambda_g);             
+             
+             % ****  % Procces noise covariance matrix U:
+             % sigma_nu_g -> noise angle giro drift
+             % sigma_xg >  noise bias giro drift            
+                     
+             
+             U = [ eye(3,3)*(sigma_nu_g)^2   zeros(3,3)
+                          zeros(3,3)     eye(3,3)*(sigma_xg)^2 ];
+             
+             %***************************************************
+             
+             %***************************************************
+             
+             P = JFx*P*JFx' + JFu*U*JFu';    % Covariance matrix prediction     
+              
+             %****************************************************   
+             
+             
+             
+%******************************************************
+% indirect method
+
+if PAR.IndirectMethodActive == 1
+    
+             gin = u.w_bn_b;  % Giro raw readings
+             
+             Gbias = x2(5:7,1);  %  Get Giro Bias from state in m/s^2   (x_g )      
+             
+             %w_bn_b = -((gin*GiroScale*(pi/180))-Gbias');  % Giro compensated readings
+             w_bn_b =  u.w_bn_b'*GiroScale -Gbias'  + PAR.ExtraBias';   
+             
+             gyro_nrm = norm(w_bn_b);
+               
+              % Mechanization Equation  (D.36)**************************
+                W   = w_bn_b*delta_t/2;
+
+                w   = norm(W);
+                if abs(w)>1
+                    w = w/abs(w);
+                    W,w,w_bn_b,delta_t
+                    error('Integrated angle too large');
+                end
+                 if w == 0,
+                        sinwow = 1;
+                 else
+                        sinwow = sin(w)/w;
+                 end
+               W_mat = [0  -W(1) -W(2) -W(3)
+                       W(1)  0   -W(3)  W(2)
+                        W(2) W(3)   0   -W(1)
+                        W(3) -W(2) W(1)   0  ];
+                    
+                q =  x(1:4,1);
+                qp = (cos(w)*eye(4,4) + W_mat*sinwow)*q; % eqn. D.36 
+                
+               % if(mod(k-2,NormQuaternionEveryNFrames)==0)
+                    qp = qp/norm(qp); 
+               % end;
+             
+                x2(1:4,1) = qp;   %% predicted quaternion
+                
+                %********************************************************
+                
+                  % The following section accumulates phi and Qd between measurements
+                sigma_in = (norm(u.f_ip_p)*PAR.AccelScale - 9.8)*0;  %sigma_in (w^n_in  10.57) is the rotation rate of the navigation frame 
+                                                     %relative to ther inertial frame represented in navigation frame. 
+                                                     % (rotation earth not available)                                               
+                Z = zeros(3,3);
+                I = eye(3,3);
+                
+                % compute rotation matrix half way through interval (predictor-corrector)
+                Rn2b    =(quat2R(q)+quat2R(x(1:4,1)))/2; 
+                Rb2n    = Rn2b';
+                % State Space Error Model,  combination of (10.9), (10.11)
+                % and (10.57)
+                Fg  = -lambda_g*eye(3,3);   %(10.9)
+                Fa  = -lambda_a*eye(3,3);   % (10.12)
+                
+                
+                F = [Z -Rb2n  Z
+                     Z  Fg    Z
+                     Z  Z     Fa];
+                G = [-Rb2n  Z    -Rb2n Z
+                     Z  I     Z     Z
+                     Z  Z     Z     I];
+                % Incerted Noise 
+                Q = [I*sigma_in^2 Z          Z           Z
+                     Z        I*(sigma_xg*1)^2   Z           Z
+                     Z            Z     I*(sigma_nu_g*10)^2   Z
+                     Z            Z          Z       I*sigma_xa^2*0]; 
+                 % check if increasing giro variance (sigma_nu_g*10 ) could increase performance 
+                 %sigma_xa^2*0 indicate that accel bias will be fixed
+                 % on the other hand, it seem like using sigma_xa <> 0 is
+                 % currently improving experimental results
+                
+                [phi,q]=calc_Qd_phi(F,G*Q*G',delta_t); 
+                Phi = phi*Phi;          % accumulate phi,  (CH7)
+                Qd  = phi*(q+Qd)*phi';  % accumulate Qd,   (CH7)
+                % update cov at high rate only to make nice plots
+                P2  = Phi*P2*Phi' + Qd;             % time propagate cov
+                % prepare for next period of integration
+                Phi = eye(9,9);       % reset Phi
+                Qd  = zeros(9,9);     % reset Qd
+    
+    
+else
+    
+   x2 = nan;
+   P2 = nan;
+end;

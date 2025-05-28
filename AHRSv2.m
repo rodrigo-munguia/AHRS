@@ -1,0 +1,484 @@
+function AHRSv2
+% Munguia AHRS application
+% Attitude estimation (Mayo 2012 version).
+% - Zero velocity update
+%
+
+
+close all;  
+clear all ;
+global PAR;
+global GVAR;
+global DATA;
+
+
+%*************************************************************************
+fprintf('******************************************** \n');
+fprintf('AHRS application \n');
+fprintf('Rodrigo Munguia, Mayo (2012)  \n');
+fprintf('******************************************** \n');
+
+
+%*************************************************************************
+% Data and parameters
+%*************************************************************************
+% Load Parameters
+Parameters3;
+% Initialize Global Variables
+GlobalVar;
+% % LOAD DATA 
+LoadData;
+%*************************************************************************
+
+nSteps = PAR.nSteps; 
+
+
+HistState3 = []; % array for storing of data
+HistState3IND = []; % array for storing of data
+HistGTAtt = []; % array for storing of data
+HistAtt = []; % array for storing of data
+HistAttIND = []; % array for storing of data
+
+% Initial States  (proposed method) *****************************************
+% x meaning
+% index  1  2  3  4  5   6   7   8  9   10  
+%       q1 q2 q3 q4 w_x w_y w_z b_x b_y b_z  
+% AHRS states
+% x(1:4)=   [q1 q2 q3 q4] -> quaternion orientation  (navigation to body rotation)
+% x(5:7)=   [w_x w_y w_z ] -> compensated vel rotation in the body frame
+% x(8:10)=  [b_x b_y b_z ] -> gyro bias
+
+x(1:10,1) =  zeros(10,1); 
+P = zeros(10);
+
+% Initial States  (Farrel 2005) (indirect method) *****************************************
+% x2 meaning
+% index  1  2  3  4  5   6   7   8  9  10  
+%       q1 q2 q3 q4 b_x b_y b_z  0  0   0 
+% AHRS states
+% x2(1:4)=   [q1 q2 q3 q4] -> quaternion orientation  (navigation to body rotation)
+% x2(5:7)=   [b_x b_y b_z ] -> gyro bias
+% x2(8:10)=  [0 0 0 ] -> unused
+
+x2(1:10,1) =  zeros(10,1); 
+P2 = zeros(10);
+
+
+
+%***********************************************************************
+% Estimate OFFLINE the GLRT - Generalized likelihood ratio test
+f_imu  = DATA.IMU(:,2:4)'* PAR.AccelScale;
+omega_imu  = DATA.IMU(:,5:7)';
+u_det =[f_imu; omega_imu];
+[zupt T]=zero_velocity_detector2(u_det);
+%**********************************************************************
+
+% Filter Loop
+run = 1;
+% test
+
+
+
+while run  
+  
+          [u g k j gt]= ReadData;
+          
+          % if no measurements are obtained from IMU nor GPS then terminate
+          if isnan([u.f_ip_p]) 
+            run = 0; % terminate loop
+          end
+          
+          if(mod(k,100)==0)||k==1   % display every 100 frames        
+          msg = sprintf('Step:%i',k);          
+              disp(msg)
+          end;
+          
+          
+     if (mod(k,PAR.EstEvery)==0)||k==1   % estimate every n steps   
+      
+         
+         switch GVAR.e,
+          
+          
+         case 0,   % Pre Initialization operation mode%          
+             
+             if ~isnan([u.f_ip_p]) % if IMU measurement is available
+                
+                                
+                
+             
+                if zupt(k)==false;  % if the device is accelerating 
+                    GVAR.e = 1; % "jump to the next oepration mode"               
+                    [phi,theta,psi] = Quaternion_To_Euler(x(1:4));
+                    msg = sprintf('Step:%i',k);          
+                    disp(msg)
+                    init_state = x
+                    init_euler = [phi theta psi]*(180/pi)  
+                    
+                    tic %start clock
+                else
+                    
+                    [x P x2 P2] = InitAHRSsysv2(u,x,P,x2,P2);
+                    x(8:10);
+                end; 
+             end;
+                                  
+         case 1,   % Filter in "AHRS" operation mode   
+              
+             
+             
+             if ~isnan([u.f_ip_p]) % if IMU measurement is available
+                       
+                 
+                GVAR.t = GVAR.t + PAR.delta_t;  %incrementar tiempo  
+                
+                    [x P x2 P2]= PredictionAHRSsysv3(u,x,P,x2,P2); % prediction equations 
+                
+             
+                if and((GVAR.t > GVAR.T_m + PAR.itm),PAR.MagUpdateActive == 1)
+                            
+                    [x P x2 P2]= MagnetometerUpdateAHRSv2(u,x,P,x2,P2);  % magnetometers update              
+               
+                end;
+             
+                if and(GVAR.t > GVAR.T_a + PAR.it ,and(zupt(k)==true,PAR.AccelUpdateActive==1))
+                              
+                    [x P x2 P2]= AcelerometerUpdateAHRSv2(u,x,P,x2,P2);  % accelerometers update
+                               
+                end;
+             
+             
+             
+             
+             end;
+               
+          end; % switch GVAR.e,    
+             
+            if PAR.DirectMethodActive == 1 
+                %HistState = [HistState;x'];     
+                HistGTAtt = [HistGTAtt;gt.euler'*(180/pi)]; 
+                
+                [phi,theta,psi,Pe] = Quaternion_To_Euler_COVM(x(1:4),P(1:4,1:4));
+                HistAtt = [HistAtt;[phi,theta,psi]*(180/pi)']; 
+                HistState3 = [HistState3;x']; %continuos
+                
+                
+               % NEES_DIR =  [[phi;theta]-gt.euler(1:2)]'*inv(Pe(1:2,1:2))*[[phi;theta]-gt.euler(1:2)];
+                
+             end;
+                
+             if PAR.IndirectMethodActive == 1
+                    [phi,theta,psi,Pe] = Quaternion_To_Euler_COVM(x2(1:4),P2(1:4,1:4));
+                    HistAttIND = [HistAttIND;[phi,theta,psi]*(180/pi)']; 
+                    HistState3IND = [HistState3IND;x2']; %continuos
+                    
+                %NEES_IND =  [[phi;theta]-gt.euler(1:2)]'*inv(Pe(1:2,1:2))*[[phi;theta]-gt.euler(1:2)];
+                 %NEES_IND =  [[phi;theta;psi]-gt.euler]'*inv(Pe)*[[phi;theta;psi]-gt.euler]   
+                    
+                    
+                 %[NEES_DIR NEES_IND ]
+                 
+              end;
+             
+             %HistState = [HistState;x'];
+              
+          q = 10;
+  
+        
+      
+      end;       
+      
+      
+    
+ end; % while run 
+ 
+ 
+toc % measure time elapsed
+DIR_Roll_error_mean = nanmean(abs(HistGTAtt(:,1)-HistAtt(:,1)))
+IND_Roll_error_mean = nanmean(abs(HistGTAtt(:,1)-HistAttIND(:,1)))
+
+DIR_Pitch_error_mean = nanmean(abs(HistGTAtt(:,2)-HistAtt(:,2)))
+IND_Pitch_error_mean = nanmean(abs(HistGTAtt(:,2)-HistAttIND(:,2)))
+
+DIR_Yaw_error_mean = nanmean(abs(HistGTAtt(:,3)-HistAtt(:,3)))
+IND_Yaw_error_mean = nanmean(abs(HistGTAtt(:,3)-HistAttIND(:,3)))
+ 
+
+i = 0:PAR.delta_t:(nSteps-1)/(100*PAR.EstEvery);
+i = 0:PAR.delta_t:(nSteps-2)/((1/PAR.delta_t)*PAR.EstEvery);
+ 
+%L=~((isnan(HistStore(4,:))|isnan(i))& (isnan(HistStore(1,:))|isnan(i)));
+%er_r = mean(abs(HistStore(1,L)-HistStore(4,L)))
+%L=~((isnan(HistStore(5,:))|isnan(i))& (isnan(HistStore(2,:))|isnan(i)));
+%er_p = mean(abs(HistStore(2,L)-HistStore(5,L)))
+%L=~((isnan(HistStore(6,:))|isnan(i))& (isnan(HistStore(3,:))|isnan(i)));
+%er_y = mean(abs(HistStore(3,L)-HistStore(6,L)))
+
+%*************************************************************************
+% roll
+figure (1)
+
+title({'Roll'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+e_roll = HistAtt(:,1);
+t_roll = HistGTAtt(:,1);
+axis([0,inf,min([min(e_roll);min(t_roll)]),max([max(e_roll);max(t_roll)])])
+L=~(isnan(HistGTAtt(:,1))|isnan(i)');
+plot(i(L),HistGTAtt(L,1),'linewidth',1,'color','k');
+hold on;
+L=~(isnan(HistAttIND(:,1))|isnan(i)');
+plot(i(L),HistAttIND(L,1),'linewidth',1,'color',[1,0,0]);
+hold on;
+L=~(isnan(HistAtt(:,1))|isnan(i)');
+plot(i(L),HistAtt(L,1),'linewidth',1,'color',[0,1,0]);
+hold on;
+ylabel('Roll (degrees)');
+xlabel('Time (Seconds)');
+
+figure (2)
+title({'Roll Gyro Bias'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%e_v = HistStore(3,:);
+%t_v = HistStore(6,:);
+%axis([0,inf,min([min(e_v);min(t_v)]),max([max(e_v);max(t_v)])])
+axis([0,inf,-inf,inf,-inf,inf])
+L=~(isnan(HistState3IND(:,5))|isnan(i)');
+plot(i(L),HistState3IND(L,5),'linewidth',2,'color',[1,0,0]);
+hold on;
+L=~(isnan(HistState3(:,8))|isnan(i)');
+plot(i(L),HistState3(L,8),'linewidth',2,'color',[0,1,0]);
+hold on;
+
+ylabel('Gyro Bias(radians/seconds)');
+xlabel('Time (Seconds)');
+
+figure (3)
+title({'Roll Absolut Error'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%e_v = HistStore(3,:);
+%t_v = HistStore(6,:);
+%axis([0,inf,min([min(e_v);min(t_v)]),max([max(e_v);max(t_v)])])
+axis([0,inf,-inf,inf,-inf,inf])
+L=~((isnan(HistGTAtt(:,1))|isnan(i)')& (isnan(HistAttIND(:,1))|isnan(i)'));
+er_y = abs(HistGTAtt(L,1)-HistAttIND(L,1));
+%axis([0,inf,min(er_y),max(er_y)])
+plot(i(L),er_y,'linewidth',2,'color',[1,0,0]);
+hold on;
+L=~((isnan(HistGTAtt(:,1))|isnan(i)')& (isnan(HistAtt(:,1))|isnan(i)'));
+er_p = abs(HistGTAtt(L,1)-HistAtt(L,1));
+%axis([0,inf,min(er_p),max(er_p)])
+plot(i(L),er_p,'linewidth',2,'color',[0,1,0]);
+hold on;
+ylabel('Error (degrees)');
+xlabel('Time (Seconds)');
+
+
+%**************************************************************************
+% pitch
+figure (4)
+title({'Pitch'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+e_roll = HistAtt(:,2);
+t_roll = HistGTAtt(:,2);
+axis([0,inf,min([min(e_roll);min(t_roll)]),max([max(e_roll);max(t_roll)])])
+L=~(isnan(HistGTAtt(:,2))|isnan(i)');
+plot(i(L),HistGTAtt(L,2),'linewidth',1,'color','k');
+hold on;
+L=~(isnan(HistAttIND(:,2))|isnan(i)');
+plot(i(L),HistAttIND(L,2),'linewidth',1,'color',[1,0,0]);
+hold on;
+L=~(isnan(HistAtt(:,2))|isnan(i)');
+plot(i(L),HistAtt(L,2),'linewidth',1,'color',[0,1,0]);
+hold on;
+ylabel('Pitch (degrees)');
+xlabel('Time (Seconds)');
+
+figure (5)
+title({'Pitch Gyro Bias'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%e_v = HistStore(3,:);
+%t_v = HistStore(6,:);
+%axis([0,inf,min([min(e_v);min(t_v)]),max([max(e_v);max(t_v)])])
+axis([0,inf,-inf,inf,-inf,inf])
+L=~(isnan(HistState3IND(:,6))|isnan(i)');
+plot(i(L),HistState3IND(L,6),'linewidth',2,'color',[1,0,0]);
+hold on;
+L=~(isnan(HistState3(:,9))|isnan(i)');
+plot(i(L),HistState3(L,9),'linewidth',2,'color',[0,1,0]);
+hold on;
+
+ylabel('Gyro Bias(radians/seconds)');
+xlabel('Time (Seconds)');
+
+figure (6)
+title({'Pitch Absolut Error'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%e_v = HistStore(3,:);
+%t_v = HistStore(6,:);
+%axis([0,inf,min([min(e_v);min(t_v)]),max([max(e_v);max(t_v)])])
+axis([0,inf,-inf,inf,-inf,inf])
+L=~((isnan(HistGTAtt(:,2))|isnan(i)')& (isnan(HistAttIND(:,2))|isnan(i)'));
+er_y = abs(HistGTAtt(L,2)-HistAttIND(L,2));
+%axis([0,inf,min(er_y),max(er_y)])
+plot(i(L),er_y,'linewidth',2,'color',[1,0,0]);
+hold on;
+L=~((isnan(HistGTAtt(:,2))|isnan(i)')& (isnan(HistAtt(:,2))|isnan(i)'));
+er_p = abs(HistGTAtt(L,2)-HistAtt(L,2));
+%axis([0,inf,min(er_p),max(er_p)])
+plot(i(L),er_p,'linewidth',2,'color',[0,1,0]);
+hold on;
+ylabel('Error (degrees)');
+xlabel('Time (Seconds)');
+
+%***************************************************************************
+%  Yaw
+figure (7)
+title({'Yaw'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+e_roll = HistAtt(:,3);
+t_roll = HistGTAtt(:,3);
+axis([0,inf,min([min(e_roll);min(t_roll)]),max([max(e_roll);max(t_roll)])])
+L=~(isnan(HistGTAtt(:,3))|isnan(i)');
+plot(i(L),HistGTAtt(L,3),'linewidth',1,'color','k');
+hold on;
+L=~(isnan(HistAttIND(:,3))|isnan(i)');
+plot(i(L),HistAttIND(L,3),'linewidth',1,'color',[1,0,0]);
+hold on;
+L=~(isnan(HistAtt(:,3))|isnan(i)');
+plot(i(L),HistAtt(L,3),'linewidth',1,'color',[0,1,0]);
+hold on;
+ylabel('Yaw (degrees)');
+xlabel('Time (Seconds)');
+
+figure (8)
+title({'Yaw Gyro Bias'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%e_v = HistStore(3,:);
+%t_v = HistStore(6,:);
+%axis([0,inf,min([min(e_v);min(t_v)]),max([max(e_v);max(t_v)])])
+axis([0,inf,-inf,inf,-inf,inf])
+L=~(isnan(HistState3IND(:,7))|isnan(i)');
+plot(i(L),HistState3IND(L,7),'linewidth',2,'color',[1,0,0]);
+hold on;
+L=~(isnan(HistState3(:,10))|isnan(i)');
+plot(i(L),HistState3(L,10),'linewidth',2,'color',[0,1,0]);
+hold on;
+
+ylabel('Gyro Bias(radians/seconds)');
+xlabel('Time (Seconds)');
+
+figure (9)
+title({'Yaw Absolut Error'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%e_v = HistStore(3,:);
+%t_v = HistStore(6,:);
+%axis([0,inf,min([min(e_v);min(t_v)]),max([max(e_v);max(t_v)])])
+axis([0,inf,-inf,inf,-inf,inf])
+L=~((isnan(HistGTAtt(:,3))|isnan(i)')& (isnan(HistAttIND(:,3))|isnan(i)'));
+er_y = abs(HistGTAtt(L,3)-HistAttIND(L,3));
+%axis([0,inf,min(er_y),max(er_y)])
+plot(i(L),er_y,'linewidth',2,'color',[1,0,0]);
+hold on;
+L=~((isnan(HistGTAtt(:,3))|isnan(i)')& (isnan(HistAtt(:,3))|isnan(i)'));
+er_p = abs(HistGTAtt(L,3)-HistAtt(L,3));
+%axis([0,inf,min(er_p),max(er_p)])
+plot(i(L),er_p,'linewidth',2,'color',[0,1,0]);
+hold on;
+
+ylabel('Error (degrees)');
+xlabel('Time (Seconds)');
+
+ 
+ %{
+figure(2);
+title({'Roll, Bias Roll ,Error '; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+
+subplot(3,1,1);
+plot(HistGTAtt(:,1),'linewidth',1,'color','k')  % roll  x
+hold on;
+plot(HistAttIND(:,1),'linewidth',1,'color',[1,0,0])  % roll  x
+hold on;
+plot(HistAtt(:,1),'linewidth',1,'color',[0,1,0])  % roll  x
+hold on;
+subplot(3,1,2);
+
+hold on;
+plot(HistState3IND(:,5),'linewidth',2,'color',[1,0,0]) 
+hold on;
+plot(HistState3(:,8),'linewidth',2,'color',[0,1,0])
+hold on;
+subplot(3,1,3);
+
+
+plot(abs(HistGTAtt(:,1)-HistAttIND(:,1)),'linewidth',1,'color',[1,0,0])  % 
+hold on;
+plot(abs(HistGTAtt(:,1)-HistAtt(:,1)),'linewidth',1,'color',[0,1,0])  % roll  x
+
+
+ylabel('Roll Angle (degrees)');
+xlabel('Steps');
+
+
+
+
+
+%********************************************************************************
+
+
+
+figure(3);
+title({'Velocity rotation   '; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%subplot(3,1,1);
+ plot(HistState3(:,5),'linewidth',1,'color',[0,1,0])
+%subplot(3,1,2);
+hold on;
+ plot(HistState3(:,6),'linewidth',1,'color',[0,0,1])
+%subplot(3,1,3);
+hold on;
+ plot(HistState3(:,7),'linewidth',1,'color',[1,0,0])
+ ylabel('Velocity rotation (radians/seconds)');
+xlabel('Steps');
+
+
+figure(4);
+title({'Gyro bias  '; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+%subplot(3,1,1);
+ plot(HistState3(:,8),'linewidth',2,'color',[0,1,0])
+hold on;
+%subplot(3,1,1);
+plot(HistState3IND(:,5),'linewidth',2,'color',[0,1,1]) 
+ 
+%subplot(3,1,2);
+hold on;
+ plot(HistState3(:,9),'linewidth',2,'color',[0,0,1])
+%subplot(3,1,3);
+hold on;
+ plot(HistState3(:,10),'linewidth',2,'color',[1,0,0])
+ ylabel('Gyro Bias (radians/seconds)');
+xlabel('Steps');
+
+
+
+
+figure(5);
+
+title({'Attitude Updates'; },'FontWeight', 'bold', 'FontName', 'Bitstream Vera Sans'); 
+hold on;
+
+%stem(zupt,'linewidth',1,'color',[0,0,1])
+stem(zupt,'linewidth',.5,'color',[0,0,1],'marker','.')
+%plot(zupt,'linewidth',1,'color',[0,0,1])
+xlabel('Steps');
+
+
+ 
+
+final_state = x
+final_stateIND = x2
+ 
+ %}
+ 
+ 

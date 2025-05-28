@@ -1,0 +1,270 @@
+% ********************************************************************
+% Define parameters 
+%*********************************************************************
+
+global PAR;
+
+% select dataset *******************
+PAR.DataO = '3DM';  %3DM-GX3-45   
+%PAR.DataO = 'RaD'; % Rawseeds datasets proyect
+%PAR.DataO = 'Mal'; % Malaga datasets
+%***********************************
+
+PAR.DirectMethodActive = 1;  % 0 -> inactive  1 -> active
+PAR.IndirectMethodActive = 1;  % 0 -> inactive  1 -> active
+
+
+
+if PAR.DataO == '3DM'
+
+%*****************************************************************
+% 3DM-GX3-45 parameters
+    PAR.DatasetName   = 'DAT23';
+    
+    PAR.EstEvery = 1;
+    
+    PAR.delta_t = 1/(100/PAR.EstEvery); 
+    PAR.altitude=212; % Grenoble
+    % Rough latitude [degrees]
+    PAR.latitude=45;  % Grenoble 
+    
+    
+   % PAR.altitude=1550; % GDL
+    % Rough latitude [degrees]
+   % PAR.latitude=20;  % GDL 
+    
+   
+    
+    PAR.AccelScale= 9.80665; % Accelerometers Scale  (m/s^2)  
+    PAR.AccelBias = [0 0 0];   % Accelerometers Bias (Bytes) [AccelBiasX AccelBiasY AccelBiasZ];  
+    PAR.MagScale = 1;    % Magnetoemter Scale   (mGauss/LSB)
+    PAR.AproxMagBias = [0 0 0];  % Aproximate magnetometers Bias  (Bytes)[MagBiasX MagBiasY MagBiasZ];
+    PAR.GiroScale = 1;  % Giro Scale   (rad/s)    
+    PAR.AproxGirobias = [0 0 0];  % Aproximate Giro initial Bias (Bytes) [Bgx Bgy Bgz]; 
+    PAR.Gc = 9.80665; %gravity constant
+    % mr = [20.826 -1.066 36.573]'; %  Magnetic Field in Grenoble (nano teslat)
+    
+    PAR.mr = [20.826 0 36.573]'; % Magnetic Field in Grenoble (micro teslat)
+    %PAR.mr = [27.509 0 30.642]'; %Magnetic Field in Gdl (micro teslat)
+    
+    %  Update measurements *************************************************
+    PAR.IncludeInitialGyroBiasEstimation = 0;
+    
+    
+    PAR.AccelUpdateActive =1;  % 1 -> active 0 -> inactive   % 
+    PAR.MagUpdateActive = 1;  % 1 -> active 0 -> inactive   %
+    
+    PAR.itm = .1; %minimun time beetween Magnetometes updates
+    PAR.it =  .05; %minimun time beetween Acelerometers updates
+    
+    PAR.ExtraBias = [.05 -.05 .025]';
+    %PAR.ExtraBias = [0 0 0]';
+
+
+%*****************************************************************
+elseif PAR.DataO == 'Mal'
+%******************************************************************
+%  Rawseeds datasets proyect
+ 
+    PAR.DataPath      = 'R:\\RESEARCH\\INS\\DataSets\\malaga2009_parking_0L';
+    
+    PAR.imuf       = 'parking_0L.rawlog_IMU'; 
+    PAR.gpsf       = 'parking_0L.rawlog_GPS.txt_GPS_RTK_FRONT_L';
+    PAR.AntGPSoffset = [1.729 -.5725 -0.115];  % Must be expresed in NED coordiantes !! [1.729 .5725 0.115]; original data 
+    %PAR.AntGPSoffset = [0 0 0]; 
+    PAR.delta_t = 1/100; 
+    PAR.altitude=40; % Malaga
+   % Rough latitude [degrees]
+    PAR.latitude=36;  % Malaga
+   
+    
+    % Xsens IMU parameters
+    PAR.AccelScale= 1; % Accelerometers Scale  (m/s^2)  
+    PAR.AccelBias = [0 0 0];   % Accelerometers Bias (Bytes) [AccelBiasX AccelBiasY AccelBiasZ];  
+    PAR.MagScale = 1;    % Magnetoemter Scale   (mGauss/LSB)
+    PAR.AproxMagBias = [0 0 0];  % Aproximate magnetometers Bias  (Bytes)[MagBiasX MagBiasY MagBiasZ];
+    PAR.GiroScale = 1;  % Giro Scale   (rad/s)    
+    PAR.AproxGirobias = [0 0 0];  % Aproximate Giro initial Bias (Bytes) [Bgx Bgy Bgz]; 
+    PAR.Gc = 9.80665; %gravity constant
+    % mr = [20.826 -1.066 36.573]'; %  Magnetic Field in Grenoble (nano teslat)
+    PAR.mr = [20.826 0 36.573]'; % Magnetic Field in Grenoble (nano teslat)
+    
+    %  Update measurements *************************************************
+    PAR.AccelUpdateActive =1;  % 1 -> active 0 -> inactive   % 
+    PAR.MagUpdateActive = 0;  % 1 -> active 0 -> inactive   NO MAG available
+    PAR.GpsINSUpdateActive = 1; % 1 -> active 0 -> inactive   %
+    
+    PAR.AccelINSUpdateActive = 1; % 1 -> active 0 -> inactive   %
+    PAR.YawUpdate_fromAuxFIlter_Active = 1; % 1 -> active 0 -> inactive   %
+    % IF AHRS_INS_coupled it is assumed that x IMU axis always point
+    % torward the movement of the body
+    PAR.AHRS_INS_decoupled = 1;  % 1 -> active 0 -> inactive   %
+    
+    PAR.IncludeInitialGyroBiasEstimation = 0;
+    PAR.CompensatedAccelBiasActive = 1;  % 1 -> active 0 -> inactive   %
+    PAR.CompensatedGyroBiasActive = 1;  % 1 -> active 0 -> inactive   %
+    
+    PAR.ExtraGyroBiasActive = 0;  % 1 -> active 0 -> inactive   %
+    PAR.ExtraAccelBiasActive = 0;  % 1 -> active 0 -> inactive   %
+    
+    PAR.ZeroVelUpdateActive = 1;
+    
+    
+    PAR.itm = .25; %minimun time beetween Magnetometes updates
+    PAR.it =  .05; %minimun time beetween Acelerometers updates
+    PAR.itv =  .02; %minimun time beetween Zero velocity updates
+    
+%*****************************************************************
+elseif PAR.DataO == 'RaD'
+%******************************************************************
+%  Rawseeds datasets proyect
+
+    PAR.DataPath      = 'R:\\RESEARCH\\INS\\DataSets\\Bovisa';
+    PAR.DatasetName   = 'Bovisa_2008-10-07_Dynamic';  % Outdoor
+    PAR.imuf       = '-IMU_STRETCHED4.csv'; 
+    PAR.gpsf       = '-GPS4.csv';
+    PAR.AntGPSoffset = [0 0 0];  % Must be expresed In NED coordiantes !!  
+    PAR.delta_t = 1/127; 
+    PAR.altitude=120; % Milan
+   % Rough latitude [degrees]
+    PAR.latitude=45;  % Grenoble /Milan
+   
+    
+    % Xsens IMU parameters
+    PAR.AccelScale= 1; % Accelerometers Scale  (m/s^2)  
+    PAR.AccelBias = [0 0 0];   % Accelerometers Bias (Bytes) [AccelBiasX AccelBiasY AccelBiasZ];  
+    PAR.MagScale = 1;    % Magnetoemter Scale   (mGauss/LSB)
+    PAR.AproxMagBias = [0 0 0];  % Aproximate magnetometers Bias  (Bytes)[MagBiasX MagBiasY MagBiasZ];
+    PAR.GiroScale = 1;  % Giro Scale   (rad/s)    
+    PAR.AproxGirobias = [0 0 0];  % Aproximate Giro initial Bias (Bytes) [Bgx Bgy Bgz]; 
+    PAR.Gc = 9.80665; %gravity constant
+    % mr = [20.826 -1.066 36.573]'; %  Magnetic Field in Grenoble (nano teslat)
+    PAR.mr = [20.826 0 36.573]'; % Magnetic Field in Grenoble (nano teslat)
+    
+    
+    %  Update measurements *************************************************
+    PAR.AccelUpdateActive =1;  % 1 -> active 0 -> inactive   % 
+    PAR.MagUpdateActive = 1;  % 1 -> active 0 -> inactive   %
+    PAR.AccelINSUpdateActive = 1; % 1 -> active 0 -> inactive   %
+    PAR.GpsINSUpdateActive = 1; % 1 -> active 0 -> inactive   
+    PAR.YawUpdate_fromAuxFIlter_Active = 1; % 1 -> active 0 -> inactive   %
+
+    PAR.itm = .25; %minimun time beetween Magnetometes updates
+    PAR.it =  .05; %minimun time beetween Acelerometers updates
+
+
+end;
+
+
+%*****************************************************************
+%  Parameters
+%delta_t =.01;  % sample period
+
+PAR.lambda_g = 1/10000;       % 1/sec,   correlation time
+%PAR.lambda_a = 1/1000;       % 1/sec,   correlation time
+PAR.lambda_a = 1/10000;       % 1/sec,   correlation time
+
+%PAR.sigma_nu_g = 2.2e-3;     % rad/s/rt_Hz, angle drift rate
+PAR.sigma_nu_g = 2.2e-4;     % rad/s/rt_Hz, angle drift rate
+
+
+%PAR.sigma_nu_g = 7.0e-2;    
+
+%PAR.sigma_nu_a = 1.2e-2;     % m/s/s/rt_Hz, velocity drift rate
+
+PAR.sigma_nu_a = 8.0e-4;     % m/s/s/rt_Hz, velocity drift rate
+
+PAR.Pxg       = 2e-11;        % rad^2/s^2, ss bias cov
+%PAR.Pxg       = 2e-10;        % rad^2/s^2, ss bias cov
+PAR.Pxa       = 2e-4;        % m^2/s^4, ss bias cov
+
+%PAR.sigma_xg  = sqrt(2*PAR.lambda_g*PAR.Pxg);      % rad/s/s/rt_Hz, bias drift rate
+ 
+%PAR.sigma_xg =  6.3246e-006; 
+%PAR.sigma_xg =  6.3246e-005; 
+PAR.sigma_xg =  6.0e-006;  
+%PAR.sigma_xg =  6.0e-0010; 
+
+PAR.sigma_xa  = sqrt(2*PAR.lambda_a*PAR.Pxa); % m/s/s/s/rt_Hz, bias drift rate
+
+
+
+PAR.Fg  = -PAR.lambda_g*eye(3,3);   %(10.9)
+PAR.Fa  = -PAR.lambda_a*eye(3,3);   % (10.12)
+PAR.Phi = eye(9,9);
+PAR.Qd  = zeros(9,9);
+PAR.Ra = (PAR.sigma_nu_a)^2;      
+
+
+PAR.Rm = (1*pi/180)^2;      % rad^2, equiv to 1 deg, magnetometer noise
+  
+%PAR.lambda_w = 1/.0105;  %correlation time filtered giro readings
+PAR.lambda_w = 100; %  Filter does not "memorize" previous giro readings values
+ 
+PAR.NormQuaternionEveryNFrames = 1;
+
+%***********************************************************************
+
+% settings for the GLRT - Generalized likelihood ratio test
+%global simdata;
+% Rough altitude [m] 
+ % Magnitude of the local gravity vector [m/s^2]
+   PAR.g=gravity(PAR.latitude,PAR.altitude);
+
+
+
+% Standard deviation of the acceleromter noise [m/s^2]. This is used to 
+% control the zero-velocity detectors trust in the accelerometer data.
+PAR.sigma_a=0.01; 
+
+% Standard deviation of the gyroscope noise [rad/s]. This is used to 
+% control the zero-velocity detectors trust in the gyroscope data.
+PAR.sigma_g=0.1*pi/180;  
+
+% Window size of the zero-velocity detector [samples] 
+PAR.Window_size=3;
+
+% Threshold used in the zero-velocity detector. If the test statistics are 
+% below this value the zero-velocity hypothesis is chosen.  
+%PAR.gamma=0.1e7;
+
+PAR.gamma=0.3e5;
+
+%simdata.gamma=0.3e6;
+%simdata.gamma=0.7e3; 
+%simdata.gamma=0.6e4; 
+PAR.gamma=0.6e4;
+
+% (Offline)Zero velocity detector
+
+% Plot parameters *************************************************
+
+PAR.DrawQuaternionEveryNFrames = 50;
+PAR.viewcam = [90,90,90];
+
+
+
+
+
+
+%Accel_and_MAg_UpdateActive =1;     % 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+SampleF = 1; %  consider measurements every "SampleF" readings
+FreqReads = 100/SampleF;  % Sample frequency
+PAR.delta_t = PAR.delta_t*SampleF;  % sample period
+
+
+%***********************************
+% GPS
+PAR.xe_ini = [];  % origin of the tanget plane
+PAR.R_e2t = [];  % ECEF to Tangent Plane Rotation Matrix at the origin xe_ini
+PAR.lat_ini = 0;
+PAR.lon_ini = 0;
+PAR.h_ini = 0;
+
+
+
+
+
+

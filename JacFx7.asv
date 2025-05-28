@@ -1,0 +1,151 @@
+function [JFx, JFu]   =  JacFx7(x,w_u,delta_t,Gbias,lambda_w,lambda_g)
+% Munguia 2010
+%
+% x meaning
+               % index  1  2  3  4  5   6   7   8  9   10
+               %       q1 q2 q3 q4 w_x w_y w_z b_x b_y b_z     
+               %   [q1 q2 q3 q4] -> quaternion orientation  
+               %   [w_x w_y w_z ] -> vel rotation in the body frame
+               %   [b_x b_y b_z ] -> gyro bias
+% jacobian of f respect to state x
+%  
+% x(8:10) = (eye(3)*(1-(lambda_g*delta_t)))*x(8:10);
+%             
+% compensated velocity rotation
+%           
+% x(5:7) = -u.w_bn_b*GiroScale  + x(8:10);
+%
+% Mechanization Equation  (D.36)
+%
+% x(1:4) = (cos(w)*eye(4,4) + W_mat*sinwow)*x(1:4); % eqn. D.36 
+% where
+%{
+% sinwow = sin(w)/w;
+% w   = norm(W);
+%
+W_mat = [0  -W(1) -W(2) -W(3)
+        W(1)  0   -W(3)  W(2)
+        W(2) W(3)   0   -W(1)
+        W(3) -W(2) W(1)   0  ];
+
+W   = x(5:7)*delta_t/2;
+%}
+
+
+
+% ***  Jacobians are formed by
+% JFx = [dfq_dq dfq_dw     0    ]    
+%       [  0    dfw_du   dfw_db ]
+%       [  0      0      dfb_db ]
+% dfq_dq are the derivateves of f (quaternion part) respect to quaternion q 
+% dfq_dw are the derivatives of f (quaternion part)respect to velocity of rotation.
+% dfw_du are the derivatives of f (velocity part)respect to itself.
+% dfw_db are the derivatives of f (velocity part)respect to gyro bias.
+% dfb_db are the derivatives of f (gyro bias part) respect to itself
+% and:
+% JFu = [  0        ]
+%       [  dfw_dwu  ]
+%       [  0        ]
+% df_du are the derivatives of f respect to input giros w_u
+
+
+ W   = w_u*delta_t/2;
+ w   = norm(W);
+ 
+            
+if w == 0,
+     sinwow = 1;
+else
+     sinwow = sin(w)/w;
+end
+
+  W_mat = [0  -W(1) -W(2) -W(3)
+          W(1)  0   -W(3)  W(2)
+          W(2) W(3)   0   -W(1)
+          W(3) -W(2) W(1)   0  ];                   
+               
+ qmult = (cos(w)*eye(4,4) + W_mat*sinwow); % eqn. D.36 
+ 
+ %******************
+ dfq_dq = qmult;
+ %******************
+ 
+ %  NOTA: falta "descomponer" dfq_dw utilizando la regla de la cadena.
+ 
+ q1 = x(1);
+ q2 = x(2);
+ q3 = x(3);
+ q4 = x(4);
+ w_x = x(5);
+ w_y = x(6);
+ w_z = x(7);
+ 
+ dfq_dw = [[ (delta_t^3*q2*w_x^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q2*w_x^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t*q2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^2*q1*w_x*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^3*q3*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q4*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q3*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q4*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t^3*q3*w_y^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q3*w_y^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t*q3*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^2*q1*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^3*q2*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q4*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q2*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q4*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t^3*q4*w_z^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q4*w_z^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t*q4*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^2*q1*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^3*q2*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q3*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q2*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q3*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2))]
+           [ (delta_t*q1*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_x^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_x^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^2*q2*w_x*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^3*q3*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q4*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q3*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q4*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t*q4*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q4*w_y^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q4*w_y^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^2*q2*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q3*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q3*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t^3*q3*w_z^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q3*w_z^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t*q3*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^2*q2*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q4*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q4*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2))]
+           [ (delta_t^3*q4*w_x^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q4*w_x^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t*q4*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^2*q3*w_x*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q2*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q2*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t*q1*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_y^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_y^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^2*q3*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q2*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q4*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q2*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q4*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t*q2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q2*w_z^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q2*w_z^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^2*q3*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q4*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q4*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2))]
+           [ (delta_t*q3*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q3*w_x^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q3*w_x^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^2*q4*w_x*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q2*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) + (delta_t^3*q2*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t^3*q2*w_y^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q2*w_y^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t*q2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^2*q4*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q3*w_x*w_y*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q3*w_x*w_y*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)), (delta_t*q1*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(2*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) + (delta_t^3*q1*w_z^2*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) - (delta_t^3*q1*w_z^2*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^2*q4*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(4*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)) - (delta_t^3*q2*w_y*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q3*w_x*w_z*cos(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)) + (delta_t^3*q2*w_y*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2)) - (delta_t^3*q3*w_x*w_z*sin(((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(1/2)))/(8*((delta_t^2*w_x^2)/4 + (delta_t^2*w_y^2)/4 + (delta_t^2*w_z^2)/4)^(3/2))]];
+ 
+       
+ %***
+ 
+ dfq_dM = [[ q1,  0,  0,  0, q2,  0,  0,  0, q3,  0,  0,  0, q4,  0,  0,  0]
+           [  0, q1,  0,  0,  0, q2,  0,  0,  0, q3,  0,  0,  0, q4,  0,  0]
+           [  0,  0, q1,  0,  0,  0, q2,  0,  0,  0, q3,  0,  0,  0, q4,  0]
+           [  0,  0,  0, q1,  0,  0,  0, q2,  0,  0,  0, q3,  0,  0,  0, q4]];
+       
+ 
+ dMc_dw = [ -sin(w), 0, 0, 0, 0, -sin(w), 0, 0, 0, 0, -sin(w), 0, 0, 0, 0, -sin(w)]';
+ 
+ 
+       
+       
+       
+       
+ %*****************************************
+ 
+ dfw_dw = zeros(3,3);
+ 
+ %**************************
+ 
+ dfw_db = eye(3);
+ %****************************
+ dfb_db =       [ [(1-(lambda_g*delta_t)) 0  0 ]
+                 [0 (1-(lambda_g*delta_t)) 0  ]
+                 [0  0  (1-(lambda_g*delta_t))] ];
+ %******************************
+ %**************************************************************************
+% JFx = [dfq_dq dfq_dw     0    ]    
+%       [  0    dfw_dw   dfw_db ]
+%       [  0      0      dfb_db ]
+%**************************************************************************
+
+JFx = zeros (10,10);
+JFx(1:4,1:4) = dfq_dq;
+JFx(1:4,5:7)  = dfq_dw;
+JFx(5:7,5:7) = dfw_dw ;
+JFx(5:7,8:10) = dfw_db;
+JFx(8:10,8:10) = dfb_db;
+ %**************************************************************************
+
+% JFu = [  0         0]
+%       [  dfw_dwu   0]
+%       [  0         dfw_db]
+
+JFu  = zeros (10,6);
+
+JFu(5:7,1:3) =   -1*eye(3);
+JFu(8:10,4:6) =  1*eye(3);
+ 
+       q = 10;
+ 
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+
