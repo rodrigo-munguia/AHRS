@@ -1,6 +1,6 @@
 # AHRS: A practical method for implementing an attitude and heading reference system
 
-![](AHRS.png)
+<img src="AHRS.png" alt="AHRS Diagram" width="400"/>
 
 MATLAB implementation code for paper: 
 
